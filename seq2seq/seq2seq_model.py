@@ -29,6 +29,7 @@ class Seq2SeqModel(BasicBert):
             
         self.hidden_dim = config.hidden_size
         self.vocab_size = tokenizer.vocab_size
+        self.word2ix= tokenizer.vocab
 
 
     def compute_loss(self, predictions, labels, target_mask):
@@ -83,7 +84,8 @@ class Seq2SeqModel(BasicBert):
         self.out_max_length = out_max_length
         input_max_length = max_length - out_max_length
         # print(text)
-        token_ids, token_type_ids = self.tokenizer.encode(text, max_length=input_max_length)
+        res = self.tokenizer(text, max_length=input_max_length)
+        token_ids, token_type_ids = res['input_ids'],res['token_type_ids'];
         token_ids = torch.tensor(token_ids, device=self.device).view(1, -1)
         token_type_ids = torch.tensor(token_type_ids, device=self.device).view(1, -1)
         if is_poem:## 古诗的beam-search稍有不同
