@@ -172,6 +172,8 @@ def main():
     args = parser.parse_args()
     assert Path(args.model_recover_path).exists(
     ), "--model_recover_path doesn't exist"
+    assert Path(args.output_dir).exists(
+    ), "--model_recover_path doesn't exist"
 
     os.makedirs(args.output_dir, exist_ok=True)
     os.makedirs(args.log_dir, exist_ok=True)
@@ -232,6 +234,7 @@ def main():
         total_loss += loss.item()
         end_time = time.time()
         spend_time = end_time - start_time
+
         print("epoch is " + str(epoch) + ". loss is " + str(total_loss) + ". spend time is " + str(spend_time))
             # 保存模型
         save(args.output_dir)
