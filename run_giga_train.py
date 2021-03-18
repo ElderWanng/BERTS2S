@@ -185,7 +185,9 @@ def evaluate(model, valid_loader, tokenizer, logger):
         pred_titles = model.multiTask_batch_generate(titles)
         for i in range(len(pred_titles)):
             print(src[i])
-            print(pred_titles[i],tg[i])
+            print(tg[i])
+            print(pred_titles[i])
+            print('____________________________________')
 
     pred_titles = model.multiTask_batch_generate(titles)
     for i in pred_titles:
@@ -295,7 +297,7 @@ def main():
     parser.add_argument("--model_recover_path",
                         default=None,
                         type=str,
-                        required=True,
+                        required=False,
                         help="The file of fine-tuned pretraining model.")
 
     # parser.add_argument("--optim_recover_path",
@@ -376,8 +378,7 @@ def main():
     logger.addHandler(handler)
     logger.addHandler(console)
 
-    # device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    device = torch.device("cpu")
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     special_dict = {'additional_special_tokens': []}
     special_dict[f"additional_special_tokens"].append(args.prefix1)
     if not args.single_mode:
@@ -422,7 +423,7 @@ def main():
 
     model_name = "bert"
     bert_model = load_bert(tokenizer,model_name = model_name, model_class='seq2seq')
-    if Path(args.model_recover_path).exists():
+    if args.model_recover_path and Path(args.model_recover_path).exists():
         bert_model.load_pretrain_params(args.model_recover_path)
     #
     # bert_model.load_pretrain_params(args.model_recover_path)
@@ -525,7 +526,7 @@ def main():
         logger.info("epoch is " + str(epoch) + ". loss1 is " + str(totalloss1) + ". loss2 is " + str(totalloss2)+". spend time is " + str(spend_time))
             # 保存模型
         metrics =  evaluate(bert_model,valid_loader,tokenizer,logger)
-        logger.info(metrics,epoch)
+        print(metrics,epoch)
         if metrics['bleu'] > best_score.best:
             best_score.best = metrics['bleu']
             bert_model.save_all_params(args.model_out_path)

@@ -1,4 +1,4 @@
-from typing import List
+from typing import List, Optional
 
 import torch
 import torch.nn as nn 
@@ -21,12 +21,12 @@ class Seq2SeqModel(BasicBert):
         config = ""
         if model_name == "roberta":
             from seq2seq.model.roberta_model import BertModel, BertConfig, BertLMPredictionHead
-            config = BertConfig(tokenizer.vocab_size)
+            config = BertConfig(len(tokenizer))
             self.bert = BertModel(config)
             self.decoder = BertLMPredictionHead(config, self.bert.embeddings.word_embeddings.weight)
         elif model_name == "bert":
             from seq2seq.model.bert_model import BertConfig, BertModel, BertLMPredictionHead
-            config = BertConfig(tokenizer.vocab_size)
+            config = BertConfig(len(tokenizer))
             self.bert = BertModel(config)
             self.decoder = BertLMPredictionHead(config, self.bert.embeddings.word_embeddings.weight)
         else :
@@ -41,7 +41,7 @@ class Seq2SeqModel(BasicBert):
         """
         target_mask : 句子a部分和pad部分全为0， 而句子b部分为1
         """
-        predictions = predictions.view(-1, self.vocab_size)
+        predictions = predictions.view(-1, len(self.tokenizer))
         labels = labels.view(-1)
         target_mask = target_mask.view(-1).float()
         loss = nn.CrossEntropyLoss(ignore_index=0, reduction="none")
@@ -405,6 +405,7 @@ class Seq2SeqModel(BasicBert):
             return output_ids[output_scores.argmax()]
 
     def multiTask_batch_generate(self,texts,out_max_length=40,max_length=256,task_prefix = "[_giga]", device="cpu"):
+
         self.out_max_length = out_max_length
         input_max_length = max_length - out_max_length
         batch_size = len(texts)
@@ -412,6 +413,7 @@ class Seq2SeqModel(BasicBert):
             texts[i] = task_prefix + texts[i]
         batch_tokens_and_types = self.tokenizer.batch_encode_plus(texts,max_length=input_max_length)
         task_prefix_tokens = self.tokenizer(task_prefix, add_special_tokens=False)["input_ids"]
+        init_len = [len(sentence_tokens) for sentence_tokens  in texts]
         def add_tokens_to_batch_idx(batch_tokens_and_types:dict, new_tokens: List[List]):
             batch_idx = batch_tokens_and_types['input_ids']
             batch_type = batch_tokens_and_types['token_type_ids']
@@ -461,8 +463,14 @@ class Seq2SeqModel(BasicBert):
                         flag[i]=1
                 if sum(flag)==batch_size:
                     break
+            for i in range(batch_size):
+                type_id = batch_tokens_and_types['token_type_ids'][i]
+                # tokens_id = batch_tokens_and_types['input_ids'][i]
+                left_num = len(type_id) - sum(type_id)
+                batch_tokens_and_types['input_ids'][i] = batch_tokens_and_types['input_ids'][i][left_num:]
             resulttext = self.tokenizer.batch_decode(batch_tokens_and_types['input_ids'])
             return resulttext
+
 
 
 
