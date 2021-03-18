@@ -50,12 +50,12 @@ class Seq2SeqModel(BasicBert):
     def forward(self, input_tensor, token_type_id, position_enc=None, labels=None):
         ## 传入输入，位置编码，token type id ，还有句子a 和句子b的长度，注意都是传入一个batch数据
         ##  传入的几个值，在seq2seq 的batch iter 函数里面都可以返回
-        input_tensor = input_tensor.to(self.device)
-        token_type_id = token_type_id.to(self.device)
-        if position_enc is not None:
-            position_enc = position_enc.to(self.device)
-        if labels is not None :
-            labels = labels.to(self.device)
+        # input_tensor = input_tensor.to(self.device)
+        # token_type_id = token_type_id.to(self.device)
+        # if position_enc is not None:
+        #     position_enc = position_enc.to(self.device)
+        # if labels is not None :
+        #     labels = labels.to(self.device)
         input_shape = input_tensor.shape
         batch_size = input_shape[0]
         seq_len = input_shape[1]
@@ -404,7 +404,7 @@ class Seq2SeqModel(BasicBert):
 
             return output_ids[output_scores.argmax()]
 
-    def multiTask_batch_generate(self,texts,task_prefix,out_max_length=40,max_length=256,):
+    def multiTask_batch_generate(self,texts,task_prefix="",out_max_length=40,max_length=256,):
 
         self.out_max_length = out_max_length
         input_max_length = max_length - out_max_length
