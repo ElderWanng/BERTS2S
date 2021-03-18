@@ -319,7 +319,7 @@ def main():
                         type=int,
                         help="Total batch size for training.")
     parser.add_argument("--eval_batch_size",
-                        default=64,
+                        default=128,
                         type=int,
                         help="Total batch size for eval.")
     parser.add_argument("--learning_rate", default=5e-5, type=float,
@@ -438,7 +438,7 @@ def main():
         # 一个epoch的训练
         if(single):
             bert_model.train()
-            iteration(epoch, train_dataloader=giga_dataloader, train=True)
+            iteration(epoch, train_dataloader=giga_dataloader,valid_loader=valid_loader ,train=True)
         else:
             bert_model.train()
             iteration_aux(epoch, dataloader1=giga_dataloader,dataloader2 =dataloader2 , train=True)
@@ -453,6 +453,7 @@ def main():
         total_loss = 0
         start_time = time.time()
         step = 0
+        bert_model.train()
         for token_ids, token_type_ids, target_ids in tqdm(train_dataloader, position=0, leave=True):
             step += 1
 
@@ -473,13 +474,13 @@ def main():
         logger.info("epoch is " + str(epoch) + ". loss is " + str(total_loss) + ". spend time is " + str(spend_time))
         checkpoint_name = experiment_time+"epoch"+f"{epoch}"+".bin"
         # save(str(Path(args.output_dir).joinpath(checkpoint_name)))
-        metrics = evaluate(bert_model, valid_loader, tokenizer, logger)
-        print(metrics, epoch)
-        if metrics['bleu'] > best_score.best:
-            best_score.best = metrics['bleu']
-            bert_model.save_all_params(args.model_out_path)
-            logger.info('valid_data:', metrics)
-            print(metrics)
+        # metrics = evaluate(bert_model, valid_loader, tokenizer, logger)
+        # print(metrics, epoch)
+        # if metrics['bleu'] > best_score.best:
+        #     best_score.best = metrics['bleu']
+        #     bert_model.save_all_params(args.model_out_path)
+        #     logger.info('valid_data:', metrics)
+        #     print(metrics)
 
 
     def iteration_aux(epoch, dataloader1,dataloader2, train=True):
