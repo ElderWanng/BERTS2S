@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="PublishConfigData" autoUpload="Always" serverName="greene.hpc.nyu.edu" remoteFilesAllowedToDisappearOnAutoupload="false">
+    <serverData>
+      <paths name="asd">
+        <serverdata>
+          <mappings>
+            <mapping deploy="/codes/project1" local="$PROJECT_DIR$" web="/codes/project1" />
+          </mappings>
+        </serverdata>
+      </paths>
+      <paths name="greene.hpc.nyu.edu">
+        <serverdata>
+          <mappings>
+            <mapping deploy="/codes/project1" local="$PROJECT_DIR$" web="/" />
+          </mappings>
+        </serverdata>
+      </paths>
+    </serverData>
+    <option name="myAutoUpload" value="ALWAYS" />
+  </component>
+</project>
