@@ -172,7 +172,7 @@ def collate_fn(batch):
 
     return token_ids_padded, token_type_ids_padded, target_ids_padded
 
-def evaluate(model, valid_loader, tokenizer, logger):
+def evaluate(model, valid_loader, tokenizer,args, logger):
     src = [
         "japan 's nec corp. and UNK computer corp. of the united states said wednesday they had agreed to join forces in supercomputer sales .",
         "the sri lankan government on wednesday announced the closure of government schools with immediate effect as a military campaign against tamil separatists escalated in the north of the country .",
@@ -203,7 +203,7 @@ def evaluate(model, valid_loader, tokenizer, logger):
             total += len(titles)
             titles = [' '.join(tokenizer.decode(tokenizer.encode(title)).split()[1:-1]) for title in titles]
             # title = ' '.join(tokenizer.decode(tokenizer.encode(title)).split()[1:-1])
-            pred_titles = model.multiTask_batch_generate(contents)
+            pred_titles = model.multiTask_batch_generate(contents,task_prefix=args.prefix1)
             #todo add batch sampling shit
             for i in range(len(titles)):
                 pred_title = pred_titles[i]
@@ -253,7 +253,7 @@ def main():
                         help="The valid src")
     parser.add_argument("--valid_tgt_file1", default=None, type=str,required=True,
                         help="The valid tgt")
-    parser.add_argument("--prefix1", default=None, type=str,required=True,
+    parser.add_argument("--prefix1", default="", type=str,required=False,
                         help="prefix1")
 
     parser.add_argument("--aux_data_dir",
@@ -272,7 +272,7 @@ def main():
 
     parser.add_argument("--single_mode", type=str2bool, required=True,
                         help="default True for single source")
-    parser.add_argument("--aux_prefix", default=None, type=str,required=False,
+    parser.add_argument("--aux_prefix", default="", type=str,required=False,
                         help="prefix2")
 
 
@@ -379,13 +379,13 @@ def main():
     logger.addHandler(console)
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    special_dict = {'additional_special_tokens': []}
-    special_dict[f"additional_special_tokens"].append(args.prefix1)
-    if not args.single_mode:
-        special_dict[f"additional_special_tokens"].append(args.aux_prefix)
+    # special_dict = {'additional_special_tokens': []}
+    # special_dict[f"additional_special_tokens"].append(args.prefix1)
+    # if not args.single_mode:
+    #     special_dict[f"additional_special_tokens"].append(args.aux_prefix)
 
 
-    tokenizer = loadBertTokenizer(args.vocab_path,special_dict=special_dict)
+    tokenizer = loadBertTokenizer(args.vocab_path)
 
     #prepare data
 
@@ -474,13 +474,31 @@ def main():
         logger.info("epoch is " + str(epoch) + ". loss is " + str(total_loss) + ". spend time is " + str(spend_time))
         checkpoint_name = experiment_time+"epoch"+f"{epoch}"+".bin"
         # save(str(Path(args.output_dir).joinpath(checkpoint_name)))
-        # metrics = evaluate(bert_model, valid_loader, tokenizer, logger)
+        # evaluate(bert_model,valid_loader,tokenizer,args,logger)
         # print(metrics, epoch)
         # if metrics['bleu'] > best_score.best:
         #     best_score.best = metrics['bleu']
         #     bert_model.save_all_params(args.model_out_path)
         #     logger.info('valid_data:', metrics)
         #     print(metrics)
+        src = [
+            "japan 's nec corp. and UNK computer corp. of the united states said wednesday they had agreed to join forces in supercomputer sales .",
+            "the sri lankan government on wednesday announced the closure of government schools with immediate effect as a military campaign against tamil separatists escalated in the north of the country .",
+            "police arrested five anti-nuclear protesters thursday after they sought to disrupt loading of a french antarctic research and supply vessel , a spokesman for the protesters said ."]
+        tg = ["nec UNK in computer sales tie-up", "sri lanka closes schools as war escalates",
+              "protesters target french research ship"]
+        with torch.no_grad():
+            bert_model.eval()
+            titles = [' '.join(tokenizer.decode(tokenizer.encode(title)).split()[1:-1]) for title in src]
+            pred_titles = bert_model.multiTask_batch_generate(titles,args.prefix1)
+            for i in range(len(pred_titles)):
+                print(src[i])
+                print(tg[i])
+                print(pred_titles[i])
+                print('____________________________________')
+            for text in src:
+                print(bert_model.generate(text, beam_size=1))
+
 
 
     def iteration_aux(epoch, dataloader1,dataloader2, train=True):
@@ -526,7 +544,7 @@ def main():
 
         logger.info("epoch is " + str(epoch) + ". loss1 is " + str(totalloss1) + ". loss2 is " + str(totalloss2)+". spend time is " + str(spend_time))
             # 保存模型
-        metrics =  evaluate(bert_model,valid_loader,tokenizer,logger)
+        metrics =  evaluate(bert_model,valid_loader,tokenizer,args,logger)
         print(metrics,epoch)
         if metrics['bleu'] > best_score.best:
             best_score.best = metrics['bleu']
@@ -542,9 +560,11 @@ def main():
     if(args.single_mode):
         for epoch in range(args.num_train_epochs):
             train(epoch)
+        bert_model.save_all_params(args.model_out_path)
     else:
         for epoch in range(args.num_train_epochs):
             train(epoch,single=False)
+        bert_model.save_all_params(args.model_out_path)
 
 if __name__ == '__main__':
     main()

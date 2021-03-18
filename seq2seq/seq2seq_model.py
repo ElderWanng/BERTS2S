@@ -404,7 +404,7 @@ class Seq2SeqModel(BasicBert):
 
             return output_ids[output_scores.argmax()]
 
-    def multiTask_batch_generate(self,texts,out_max_length=40,max_length=256,task_prefix = "[_giga]", device="cpu"):
+    def multiTask_batch_generate(self,texts,task_prefix,out_max_length=40,max_length=256,):
 
         self.out_max_length = out_max_length
         input_max_length = max_length - out_max_length
@@ -450,8 +450,8 @@ class Seq2SeqModel(BasicBert):
         token_ids_padded, token_type_ids_padded, lengths = idx_to_tensor(batch_tokens_and_types)
         with torch.no_grad():
             for step in range(self.out_max_length):
-                token_ids_padded = token_ids_padded.to(device)
-                token_type_ids_padded = token_type_ids_padded.to(device)
+                token_ids_padded = token_ids_padded.to(self.device)
+                token_type_ids_padded = token_type_ids_padded.to(self.device)
                 scores = self.forward(token_ids_padded,token_type_ids_padded)
                 # score_new_tokens_per_line = scores[:,[i-1 for i in lengths],:]
                 # new_tokens_id = score_new_tokens_per_line.argmax(-1)#[b,1,1]
