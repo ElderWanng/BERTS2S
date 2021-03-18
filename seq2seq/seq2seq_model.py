@@ -1,8 +1,13 @@
+from typing import List
+
 import torch
 import torch.nn as nn 
 import torch.nn.functional as F
 
 import time
+# from tokenizers import BertWordPieceTokenizer as BertTokenizer
+from transformers import BertTokenizer
+
 from seq2seq.config import yayun_list
 import os 
 from seq2seq.basic_bert import BasicBert
@@ -12,7 +17,7 @@ class Seq2SeqModel(BasicBert):
     """
     def __init__(self, tokenizer, model_name="roberta"):
         super(Seq2SeqModel, self).__init__()
-        self.tokenizer = tokenizer
+        self.tokenizer:BertTokenizer = tokenizer
         config = ""
         if model_name == "roberta":
             from seq2seq.model.roberta_model import BertModel, BertConfig, BertLMPredictionHead
@@ -398,6 +403,86 @@ class Seq2SeqModel(BasicBert):
 
 
             return output_ids[output_scores.argmax()]
+
+    def multiTask_batch_generate(self,texts,out_max_length=40,max_length=256,task_prefix = "[_giga]", device="cpu"):
+        self.out_max_length = out_max_length
+        input_max_length = max_length - out_max_length
+        batch_size = len(texts)
+        for i in range(len(texts)):
+            texts[i] = task_prefix + texts[i]
+        batch_tokens_and_types = self.tokenizer.batch_encode_plus(texts,max_length=input_max_length)
+        task_prefix_tokens = self.tokenizer(task_prefix, add_special_tokens=False)["input_ids"]
+        def add_tokens_to_batch_idx(batch_tokens_and_types:dict, new_tokens: List[List]):
+            batch_idx = batch_tokens_and_types['input_ids']
+            batch_type = batch_tokens_and_types['token_type_ids']
+            assert len(batch_idx)==len(new_tokens)
+            for i in range(len(batch_idx)):
+                batch_idx[i] = batch_idx[i] + new_tokens[i]
+                batch_type[i] = batch_type[i]+[1 for _ in range(len(new_tokens[i]))]
+
+        def idx_to_tensor(batch_dict):
+            """
+            动态padding， batch为一部分sample
+            """
+
+            batch_idx = batch_tokens_and_types['input_ids']
+            batch_type = batch_tokens_and_types['token_type_ids']
+
+
+            def padding(indice, max_length, pad_idx=self.tokenizer.pad_token_id):
+                """
+                pad 函数
+                """
+                pad_indice = [item + [pad_idx] * max(0, max_length - len(item)) for item in indice]
+                return torch.tensor(pad_indice)
+
+            max_length = max([len(t) for t in batch_idx])
+            token_ids_padded = padding(batch_idx, max_length)
+            token_type_ids_padded = padding(batch_type, max_length)
+            # target_ids_padded = token_ids_padded[:, 1:].contiguous()
+            lengths = [len(type_idx) for type_idx in batch_idx]
+            return token_ids_padded, token_type_ids_padded, lengths
+
+        add_tokens_to_batch_idx(batch_tokens_and_types, [task_prefix_tokens for _ in range(len(texts))])#all task
+        flag = [0]*batch_size
+        token_ids_padded, token_type_ids_padded, lengths = idx_to_tensor(batch_tokens_and_types)
+        with torch.no_grad():
+            for step in range(self.out_max_length):
+                token_ids_padded = token_ids_padded.to(device)
+                token_type_ids_padded = token_type_ids_padded.to(device)
+                scores = self.forward(token_ids_padded,token_type_ids_padded)
+                # score_new_tokens_per_line = scores[:,[i-1 for i in lengths],:]
+                # new_tokens_id = score_new_tokens_per_line.argmax(-1)#[b,1,1]
+                new_tokens = [[scores[i,lengths[i]-1,:].argmax(-1).item()] for i in range(batch_size)]
+                add_tokens_to_batch_idx(batch_tokens_and_types,new_tokens=new_tokens)
+                token_ids_padded, token_type_ids_padded, lengths = idx_to_tensor(batch_tokens_and_types)
+                for i in range(batch_size):
+                    if new_tokens[i]==self.tokenizer.sep_token_id:
+                        flag[i]=1
+                if sum(flag)==batch_size:
+                    break
+            resulttext = self.tokenizer.batch_decode(batch_tokens_and_types['input_ids'])
+            return resulttext
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
