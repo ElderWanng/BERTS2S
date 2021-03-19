@@ -155,3 +155,7 @@ python run_giga_train_aux.py  --data_dir  /home/tw2112/datas/data_upload/giga  -
 ```shell
 CUDA_VISIBLE_DEVICES=0,1 python -m torch.distributed.launch --nproc_per_node=1 train_single_multiGPU.py --data_dir  /home/tw2112/datas/data_upload/giga  --bert_model  bert  --model_out_path  ./models/best.bin  --log_dir  ./logs  --vocab_path  /home/tw2112/codes/project1/models/bertbase/vocab.txt  --src_file1  train.src.txt  --tgt_file1  train.tgt.txt  --train_batch_size  64  --valid_src_file1  test.src.txt  --valid_tgt_file1  test.tgt.txt 
 ```
+
+```shell
+ python train_single_multiGPU.py --data_dir  /home/tw2112/datas/data_upload/giga  --bert_model  bert  --model_out_path  ./models/best.bin  --log_dir  ./logs  --vocab_path  /home/tw2112/codes/project1/models/bertbase/vocab.txt  --src_file1  train.src.txt  --tgt_file1  train.tgt.txt  --train_batch_size  64  --valid_src_file1  test.src.txt  --valid_tgt_file1  test.tgt.txt --model_recover_path  /home/tw2112/codes/project1/models/bertbase/model.bin --cut_data 100
+```

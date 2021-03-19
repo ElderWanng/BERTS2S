@@ -1,5 +1,6 @@
 import random
 import shutil
+import sys
 import warnings
 from datetime import datetime
 import time
@@ -9,8 +10,11 @@ from pathlib import Path
 from torch.backends import cudnn
 from tqdm import tqdm
 import os
+import copy
 import torch
 from torch.utils import data
+from transformers import BertTokenizer
+
 from seq2seq.utils import load_bert
 from seq2seq.multiTokenizer import loadBertTokenizer
 
@@ -22,6 +26,7 @@ from torch.utils.data import Dataset, DataLoader
 import torch.distributed as dist
 import torch.multiprocessing as mp
 
+logger = logging.getLogger(__name__)
 
 
 
@@ -75,7 +80,6 @@ def load_corpus(args):
     sents_tgt = []
     in_path = str(Path(args.data_dir).joinpath(args.src_file1))
     out_path = str(Path(args.data_dir).joinpath(args.tgt_file1))
-    print("here")
     with open(in_path, "r", encoding="utf-8") as f:
         lines = f.readlines()
         for line in lines:
@@ -84,7 +88,7 @@ def load_corpus(args):
         lines = f.readlines()
         for line in lines:
             sents_tgt.append(line.strip())
-    print("end")
+
     return sents_src, sents_tgt
 
 def load_valid_corpus(args):
@@ -95,7 +99,7 @@ def load_valid_corpus(args):
     sents_tgt = []
     in_path = str(Path(args.data_dir).joinpath(args.valid_src_file1))
     out_path = str(Path(args.data_dir).joinpath(args.valid_tgt_file1))
-    print("here")
+
     with open(in_path, "r", encoding="utf-8") as f:
         lines = f.readlines()
         for line in lines:
@@ -104,7 +108,7 @@ def load_valid_corpus(args):
         lines = f.readlines()
         for line in lines:
             sents_tgt.append(line.strip())
-    print("end")
+
     return sents_src,sents_tgt
 
 def collate_fn(batch):
@@ -254,6 +258,10 @@ def main():
                         default=128,
                         type=int,
                         help="Total batch size for eval.")
+    parser.add_argument("--max_seq_length",
+                        default=128,
+                        type=int,
+                        help="max seq.")
     parser.add_argument("--learning_rate", default=1e-5, type=float,
                         help="The initial learning rate for Adam.")
     parser.add_argument('--momentum', default=0.9, type=float, metavar='M', help='momentum')
@@ -270,7 +278,6 @@ def main():
                         type=float,
                         help="Proportion of training to perform linear learning rate warmup for. "
                              "E.g., 0.1 = 10%% of training.")
-
     parser.add_argument("--cut_data",
                         default=0,
                         type=int,
@@ -278,123 +285,18 @@ def main():
     parser.add_argument('--seed', default=2, type=int, help='seed for initializing training. ')
     parser.add_argument('--local_rank', default=-1, type=int,
                         help='node rank for distributed training')
+    parser.add_argument('--overwrite_cache', action='store_true',
+                        help="Overwrite the cached training and evaluation sets")
     parser.add_argument('-p', '--print_freq', default=10, type=int, metavar='N', help='print frequency (default: 10)')
 
     args = parser.parse_args()
     args.nprocs = torch.cuda.device_count()
-    # args.nprocs = 1
-
+    # args.nprocs = 6
     os.makedirs(args.log_dir, exist_ok=True)
     out_path = Path(args.model_out_path).absolute()
     os.makedirs(out_path.parent, exist_ok=True)
-    # assert Path(args.model_recover_path).exists(
-    # ), "--model_recover_path doesn't exist"
 
-    mp.spawn(main_worker, nprocs=args.nprocs, args=(args.nprocs, args))
-
-    #set logger
-    # logger = logging.getLogger(__file__)
-    # logger.setLevel(level=logging.INFO)
-    #
-    # now = datetime.now()
-    # experiment_time = now.strftime("%H_%M_%S")
-    # logfilename = experiment_time+"log.txt"
-    # logflepath = str(Path(args.log_dir).joinpath(logfilename))
-    # handler = logging.FileHandler(logflepath)
-    # handler.setLevel(logging.INFO)
-    # formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-    # handler.setFormatter(formatter)
-    # console = logging.StreamHandler()
-    # console.setLevel(logging.INFO)
-    # logger.addHandler(handler)
-    # logger.addHandler(console)
-    #
-    # device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    # # special_dict = {'additional_special_tokens': []}
-    # # special_dict[f"additional_special_tokens"].append(args.prefix1)
-    # # if not args.single_mode:
-    # #     special_dict[f"additional_special_tokens"].append(args.aux_prefix)
-    #
-    #
-    # tokenizer = loadBertTokenizer(args.vocab_path)
-    #
-    #
-    # sents_src, sents_tgt = load_corpus(args)
-    # valid_src, valid_tgt = load_valid_corpus(args)
-    # if(args.cut_data>0):
-    #     cut_num = args.cut_data
-    #     sents_src = sents_src[:cut_num]
-    #     sents_tgt = sents_tgt[:cut_num]
-    #     valid_src = valid_src[:cut_num]
-    #     valid_tgt = valid_tgt[:cut_num]
-    # giga_dataset = BertDataset(sents_src, sents_tgt,tokenizer)
-    # train_sampler = torch.utils.data.distributed.DistributedSampler(giga_dataset)
-    # giga_dataloader = DataLoader(giga_dataset, batch_size=args.train_batch_size, shuffle=False, collate_fn=collate_fn,sampler=train_sampler)
-    #
-    # logger.info("device: " + str(device))
-    #
-    # best_bleu = 0
-    #
-    # model_name = "bert"
-    # bert_model = load_bert(tokenizer,model_name = model_name, model_class='seq2seq')
-    # if args.model_recover_path and Path(args.model_recover_path).exists():
-    #     bert_model.load_pretrain_params(args.model_recover_path)
-    # #
-    # # bert_model.load_pretrain_params(args.model_recover_path)
-    # bert_model.set_device(device)
-    #
-    # bert_model = torch.nn.parallel.DistributedDataParallel(bert_model, device_ids=[args.local_rank],find_unused_parameters=True)
-    # optim_parameters = list(bert_model.parameters())
-    # optimizer = torch.optim.Adam(optim_parameters, lr=args.learning_rate, weight_decay=args.weight_decay)
-    # torch.cuda.set_device(args.local_rank)
-    # task1_valid_dataset = valid_dataset(valid_src, valid_tgt)
-    # valid_loader = data.DataLoader(task1_valid_dataset,batch_size=16,shuffle=False)
-
-
-    # def train(epoch):
-    #     # 一个epoch的训练
-    #     bert_model.train()
-    #     iteration(epoch, train_dataloader=giga_dataloader,valid_loader=valid_loader ,train=True)
-    # def save(save_path):
-    #     """
-    #     保存模型
-    #     """
-    #     bert_model.save_all_params(save_path)
-    #     logger.info("{} saved!".format(save_path))
-
-    # def iteration(epoch, train_dataloader, valid_loader, train=True):
-    #     total_loss = 0
-    #     start_time = time.time()
-    #     step = 0
-    #
-    #     for token_ids, token_type_ids, target_ids in tqdm(train_dataloader, position=0, leave=True):
-    #         bert_model.train()
-    #         token_ids = token_ids.cuda(non_blocking=True)
-    #         token_type_ids = token_type_ids.cuda(non_blocking=True)
-    #         target_ids = target_ids.cuda(non_blocking=True)
-    #         step += 1
-    #
-    #         predictions, loss = bert_model(token_ids,
-    #                                     token_type_ids,
-    #                                     labels=target_ids,
-    #                                     )
-    #         # loss = loss.mean()
-    #         # print(loss)
-    #
-    #         if train:
-    #             optimizer.zero_grad()
-    #             loss.backward()
-    #             optimizer.step()
-    #         if train and step % 1000 ==0:
-    #             scoope_out(bert_model)
-    #         # 为计算当前epoch的平均loss
-    #         total_loss += loss.item()
-    #
-    #     scoope_out(bert_model)
-    #     end_time = time.time()
-    #     spend_time = end_time - start_time
-    #
-    #     logger.info("epoch is " + str(epoch) + ". loss is " + str(total_loss) + ". spend time is " + str(spend_time))
+    mp.spawn(main_worker, nprocs=args.nprocs, args=(args.nprocs,args))
 def scoope_out(bert_model, tokenizer):
     with torch.no_grad():
         bert_model.eval()
@@ -423,50 +325,35 @@ def main_worker(local_rank, nprocs, args):
         random.seed(args.seed)
         torch.manual_seed(args.seed)
         cudnn.deterministic = True
-        warnings.warn('You have chosen to seed training. '
-                      'This will turn on the CUDNN deterministic setting, '
-                      'which can slow down your training considerably! '
-                      'You may see unexpected behavior when restarting '
-                      'from checkpoints.')
 
     best_bleu = 0.0
-    # dist.init_process_group(backend='gloo', init_method="file:///C:/Users/tianshu/cache.txt", world_size=args.nprocs,
-    #                         rank=local_rank)
-
-    dist.init_process_group(backend='nccl', init_method='tcp://127.0.0.1:23456', world_size=args.nprocs, rank=local_rank)
+    if sys.platform == 'win32':
+        dist.init_process_group(backend='gloo', init_method="file:///C:/Users/tianshu/cache.txt", world_size=args.nprocs,rank=local_rank)
+    else:
+        dist.init_process_group(backend='nccl', init_method='tcp://127.0.0.1:23456', world_size=args.nprocs, rank=local_rank)
     # print("here", local_rank)
+
     tokenizer = loadBertTokenizer(args.vocab_path)
-    # print("here", local_rank)
-    sents_src, sents_tgt = load_corpus(args)
-    valid_src, valid_tgt = load_valid_corpus(args)
-    print("here", local_rank)
-    if (args.cut_data > 0):
-        cut_num = args.cut_data
-        sents_src = sents_src[:cut_num]
-        sents_tgt = sents_tgt[:cut_num]
-        valid_src = valid_src[:cut_num]
-        valid_tgt = valid_tgt[:cut_num]
-    train_dataset = BertDataset(sents_src, sents_tgt, tokenizer)
-    val_dataset = valid_dataset(valid_src, valid_tgt)
-
+    train_dataset = load_and_cache_examples(args,tokenizer)
     train_sampler = torch.utils.data.distributed.DistributedSampler(train_dataset)
 
     train_loader = torch.utils.data.DataLoader(train_dataset,
                                                batch_size=args.train_batch_size,
-                                               num_workers=2,
+                                               num_workers=1,
                                                pin_memory=True,
                                                collate_fn=collate_fn,
                                                sampler=train_sampler)
-    val_loader = torch.utils.data.DataLoader( val_dataset,
+    if local_rank==0:
+        valid_src, valid_src = load_valid_corpus(args)
+        task1_valid_dataset = valid_dataset(valid_src, valid_src)
+        val_loader = torch.utils.data.DataLoader( task1_valid_dataset,
                                                batch_size=32
                                                )
     # if args.evaluate:
     #     validate(val_loader, model, criterion, local_rank, args)
     #     return
     model_name = "bert"
-    # print("here", local_rank)
     model = load_bert(tokenizer, model_name=model_name, model_class='seq2seq')
-    # print("here", local_rank)
     model.set_device(device = torch.device("cuda" if torch.cuda.is_available() else "cpu"))
     if args.model_recover_path and Path(args.model_recover_path).exists():
         model.load_pretrain_params(args.model_recover_path)
@@ -474,14 +361,16 @@ def main_worker(local_rank, nprocs, args):
     model.cuda(local_rank)
     args.train_batch_size = int(args.train_batch_size / args.nprocs)
     model = torch.nn.parallel.DistributedDataParallel(model, device_ids=[local_rank],find_unused_parameters=True)
-    print(model.device)
+
     optimizer = torch.optim.SGD(model.parameters(), args.learning_rate, momentum=args.momentum, weight_decay=args.weight_decay)
     cudnn.benchmark = True
+
     for epoch in range(args.num_train_epochs):
         train_sampler.set_epoch(epoch)
         # val_sampler.set_epoch(epoch)
         #todo adjust_learning_rate
         # adjust_learning_rate(optimizer, epoch, args)
+
         train(train_loader, model, optimizer, epoch, local_rank, args)
         bleu = validate(val_loader, model,tokenizer, local_rank, args)['bleu']
         is_best = bleu > best_bleu
@@ -518,7 +407,6 @@ def train(train_loader, model, optimizer, epoch, local_rank, args):
                                        token_type_ids,
                                        labels=target_ids,
                                        )
-        torch.distributed.barrier()
         torch.distributed.barrier()
         reduced_loss = reduce_mean(loss, args.nprocs)
         losses.update(reduced_loss.item(), batch_size)
@@ -605,8 +493,69 @@ def save_checkpoint(state, is_best, filename='checkpoint.pth.tar'):
     if is_best:
         shutil.copyfile(filename, 'model_best.pth.tar')
 
+def load_and_cache_examples(args,tokenizer:BertTokenizer,evaluate=False,output_examples=False):
+    def read_cache(cached_features_file):
+        srcs = []
+        tgts = []
+        with open(cached_features_file,"r") as cached_file:
+            for line in cached_file:
+                a,b = line.strip().split('\t')
+                srcs.append(a)
+                tgts.append(b)
+        return srcs,tgts
+
+    def write_cache(srcs, tgts, cached_features_file):
+        assert len(srcs) == len(tgts)
+        with open(cached_features_file,"w",encoding='utf-8') as output:
+            for i in range(len(srcs)):
+                a = srcs[i]
+                b = tgts[i]
+                line = "\t".join([a.strip(),b.strip()])
+                output.write(line+'\n')
+
+    if args.local_rank not in [0]:
+        torch.distributed.barrier()# Make sure only the first process in distributed training process the dataset, and the others will use the cache
+    # Load data features from cache or dataset file
+    input_file = str(Path(args.data_dir).joinpath(args.src_file1))
+    cached_features_file = os.path.join(os.path.dirname(input_file),'cached_{}_{}_{}'.format(
+        'dev' if evaluate else 'train',
+        list(filter(None, Path(args.model_recover_path).name.strip())).pop(),
+        str(args.max_seq_length)))
+    if os.path.exists(cached_features_file) and not args.overwrite_cache and not output_examples:
+        logger.info("Loading features from cached file %s", cached_features_file)
+        sents_src, sents_tgt = read_cache(cached_features_file)
+    else:
+        logger.info("Creating features from dataset file at %s", input_file)
+        sents_src, sents_tgt = read_giga_examples(args)
+        if args.local_rank in [0]:
+            logger.info("Saving features into cached file %s", cached_features_file)
+            write_cache(sents_src, sents_tgt, cached_features_file)
+
+        if args.local_rank == 0:
+            torch.distributed.barrier()  # Make sure only the first process in distributed training process the dataset, and the others will use the cache
+
+    dataset = BertDataset(sents_src, sents_tgt, tokenizer)
+    return dataset
 
 
+
+
+
+
+def read_giga_examples(args):
+    sents_src = []
+    sents_tgt = []
+    in_path = str(Path(args.data_dir).joinpath(args.src_file1))
+    out_path = str(Path(args.data_dir).joinpath(args.tgt_file1))
+    with open(in_path, "r", encoding="utf-8") as f:
+        lines = f.readlines()
+        for line in lines:
+            sents_src.append(line.strip())
+    with open(out_path, "r", encoding="utf-8") as f:
+        lines = f.readlines()
+        for line in lines:
+            sents_tgt.append(line.strip())
+    return sents_src, sents_tgt
 
 if __name__ == '__main__':
     main()
